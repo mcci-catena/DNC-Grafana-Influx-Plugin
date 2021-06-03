@@ -1,0 +1,29 @@
+{
+  "name": "iscdncapi",
+  "version": "1.0.0",
+  "description": "RESTful API designed to make interface between Grafana and influxDB.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [
+    "Express",
+    "MongoDB",
+    "Mongoose"
+  ],
+  "author": "MCCI",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "influx": "^5.6.3",
+    "influxdb": "0.0.1",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^5.9.15",
+    "path": "^0.12.7",
+    "request": "^2.88.2",
+    "serve-static": "^1.14.1"
+  }
+}
