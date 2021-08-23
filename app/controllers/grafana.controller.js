@@ -20,24 +20,24 @@ exports.gquery = async function (req, res) {
 
     if(inq.includes("SHOW TAG KEYS"))
     {
-        console.log("\nGrafana QT-2")
+        //console.log("\nGrafana QT-2")
         tagkeyctrl.tagKey(req, res, influxd)
     }
     else
     if(inq.includes("SHOW TAG VALUES"))
     {
-        console.log("\nGrafana QT-3")
+        //console.log("\nGrafana QT-3")
         tagvalctrl.tagVal(req, res, influxd)
     }
     else
     if(inq.includes("SELECT"))
     {
-        console.log("\nGrafana QT-4")
+        //console.log("\nGrafana QT-4New")
         measctrl.measureVal(req, res, influxd)
     }
     else
     {
-        console.log("\nGrafana QT-1")
+        //console.log("\nGrafana QT-1")
         var influxset = {};
 	    influxset.server = constants.INFLUX_URL
 	    influxset.db = req.query.db

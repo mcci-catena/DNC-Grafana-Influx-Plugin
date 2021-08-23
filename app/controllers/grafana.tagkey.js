@@ -5,11 +5,13 @@ const constants = require('../misc/constants.js');
 exports.tagKey = async function (req, res, influxd) {
 
     var options = {
-        url: constants.BASE_URL+"tagsk",
+        url: constants.DNC_URL+"tagsk",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         form: { 'influxd': influxd }
     };
+
+    //console.log("Query: ", req.body.q)
 
     request(options, function (error, resp, body) {
         if (error) {
@@ -17,15 +19,15 @@ exports.tagKey = async function (req, res, influxd) {
             res.status(500).send('Connect to DNC failed!');
         }
 
-        else {
-            if (resp.statusCode == 200) {
+        else 
+        {
+            if (resp.statusCode == 200) 
+            {
                 serdict = {};
                 resdict = {};
                 findict = {};
 
                 var data = JSON.parse(resp.body);
-
-                console.log(data)
 
                 serdict["name"] = "HeatData";
                 serdict["columns"] = ["tagKey"];
@@ -38,15 +40,11 @@ exports.tagKey = async function (req, res, influxd) {
                 res.status(200).send(findict);
             }
 
-            else {
-                console.log("Tag Key Read Error")
+            else 
+            {
+                //console.log("Tag Key Read Error")
                 res.sendStatus(401);
             }
         }
-    }
-
-    );
-
+    });
 }
-
-

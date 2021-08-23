@@ -3,8 +3,6 @@ const readdb = require('./influx.js');
 
 const constants = require('../misc/constants.js');
 
-var RM_TAGS = ["devID", "devEUI"]
-
 exports.measureVal = async (req, res, influxd) => {
     reqCnt ++
     var dnckey = {}
@@ -25,7 +23,10 @@ exports.measureVal = async (req, res, influxd) => {
     respdict["dnckey"] = dnckey
     respdict["taglist"] = []
 
+    //console.log("Query Influx: ", influxd)
+
     var tspan = extractTimeSpan(selq[2])
+    //console.log("Time conv: ", tspan[0], tspan[1])
     
     respdict["fdate"] = tspan[0]
     respdict["tdate"] = tspan[1]
@@ -40,17 +41,13 @@ exports.measureVal = async (req, res, influxd) => {
     respdict["res"] = res
     respdict["sarr"] = []
 
-    console.log("RespDict: ", respdict)
-
     let gdict = {}
     try{
         gdict = await getDeviceList(respdict)
         await readDeviceData(gdict) 
     }catch(err){
-        //console.log("No Tags: ", err) 
         respdict["res"].status(400).send();    
     }
-
 }
 
 
@@ -66,7 +63,7 @@ function getDeviceList(ddict)
         dncdict["dnckey"] = ddict["dnckey"] 
 
         var options = {
-            url: constants.BASE_URL+"dlist",
+            url: constants.DNC_URL+"dlist",
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             form: { 'dncd': dncdict }
@@ -75,6 +72,7 @@ function getDeviceList(ddict)
         request(options, function (error, resp, body) {
             if (error) 
             {
+                //console.log("Connection Error")
                 reject("Connction Error")
             }
             else 
@@ -82,7 +80,7 @@ function getDeviceList(ddict)
                 if (resp.statusCode == 200)
                 {
                     var data = JSON.parse(resp.body);
-                    console.log("Inside Get Device List: ",data)
+                    //console.log("Inside Get Device List: ",data)
                     ddict["dbdata"] = data.resdict.dbdata
                     ddict["dlist"] = data.resdict.devices
                     ddict["taglist"] = data.resdict.taglist
@@ -90,6 +88,7 @@ function getDeviceList(ddict)
                 }
                 else 
                 {
+                    console.log("Error-2")
                     reject("Error")
                 }
             }
@@ -97,7 +96,6 @@ function getDeviceList(ddict)
 
     });
 }
-
 
 
 // Function Name  : readDeviceData
@@ -111,10 +109,6 @@ function readDeviceData(ddict)
     return new Promise(async function(resolve, reject) {
         for(var i=0; i<ddict["dlist"].length; i++)
         {
-            //devinfo = [ddict["dlist"][i].devid, ddict["dlist"][i].idate, ddict["dlist"][i].rdate]
-
-            console.log("Influxd: ", ddict)
-            
             var rval = await readFromInflux(ddict["id"], ddict.dbdata, ddict["strsc"], ddict["strgbc"], ddict["dlist"][i], ddict["fdate"], ddict["tdate"])
 
             sindex = rval[0]
@@ -123,8 +117,6 @@ function readDeviceData(ddict)
             //dicout = JSON.parse(infres)
             dicout = infres
 
-            console.log("influx Result: ", dicout)
-            
             if(dicout.results[0].hasOwnProperty("series"))
             {
                 indict = dicout.results[0].series[0]
@@ -135,14 +127,6 @@ function readDeviceData(ddict)
                     tagdict[ddict.taglist[k]] =  ddict["dlist"][i].location[k+2]
                 }
                  
-                /*tagdict["loctag"] = []
-                for(k=0; k<ddict.taglist.length; k++)
-                {
-                    
-                    tagdict.loctag.push(ddict["dlist"][i].location[k+2])
-                }
-                tagdict["loctag"].reverse()*/
-
                 loctag = []
                 for(k=0; k<ddict.taglist.length; k++)
                 {
@@ -173,73 +157,84 @@ function readDeviceData(ddict)
 // Example Input  : ['"state" = 'Tamil Nadu'', '"city" = 'Chennai'', '"state" = 'Karnataka'', '"city" = 'Bangalore'', '"ward" = 'Tambaram'' ]
 // Return value   : [{state: ['Tamil Nadu', 'Karnataka'], city: ['Chennai', 'Bangalore'], ward: ['Tambaram']}]
 
-
 function extractTimeSpan(timeq)
 {
-    if(timeq.includes("now() - "))
+    var qrstr = timeq.split("and")
+    var fmstr = qrstr[0]
+    var tostr = qrstr[1]
+    
+    var fmdate = convertDate(fmstr)
+    var todate = convertDate(tostr)
+
+    return [fmdate, todate]
+}
+
+function convertDate(instr)
+{
+    if(instr.includes("now()"))
     {
-        var todt = new Date()
-        var tqstr = timeq.split("-")
-        var tstr = tqstr[1].trim()
+        if(instr.includes("now() - "))
+        {
+            var fqstr = instr.split("-")
+            var fstr = fqstr[1].trim()
 
-        if(tstr.includes("m"))
-        {
-            tstr.replace("m","")
-            var minutes = parseInt(tstr)
-            var fdate = new Date(todt.getTime() - (minutes * 60 * 1000))
-            return [fdate, todt]
-        }
-        else
-        if(tstr.includes("d"))
-        {
-            tstr.replace("d","")
-            var days = parseInt(tstr)
-            var fdate = new Date(todt.getTime() - (days * 24 * 60 * 60 * 1000))
-            return [fdate, todt]
-        }
-        else
-        if(tstr.includes("h"))
-        {
-            tstr.replace("h","")
-            var thr = parseInt(tstr)
-            var days = parseInt(thr/24)
-            var hrs = thr%24
-            
-            if(days > 0)
+            if(fstr.includes("m"))
             {
-                var fdate = new Date(todt.getTime() - (days * 24 * 60 * 60 * 1000))
-                if(hrs > 0)
-                    fdate = new Date(fdate.getTime() - (hrs * 60 * 60 * 1000))
-
-                return [fdate, todt]
+                fstr.replace("m","")
+                var minutes = parseInt(fstr)
+                var fdate = new Date(new Date().getTime() - (minutes * 60 * 1000))
+                return fdate
             }
             else
+            if(fstr.includes("h"))
             {
-                var fdate = new Date(todt.getTime() - (hrs * 60 * 60 * 1000))
-                return [fdate, todt]
-            }
+                fstr.replace("h","")
+                var thr = parseInt(fstr)
+                var days = parseInt(thr/24)
+                var hrs = thr%24
             
-        } 
+                if(days > 0)
+                {
+                    var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
+                    if(hrs > 0)
+                        fdate = new Date(fdate.getTime() - (hrs * 60 * 60 * 1000))
 
+                    return fdate
+                }
+                else
+                {
+                    var fdate = new Date(new Date().getTime() - (hrs * 60 * 60 * 1000))
+                    return fdate
+                }
+            }
+            else
+            if(fstr.includes("d"))
+            {
+                fstr.replace("d","")
+                var days = parseInt(fstr)
+                var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
+                return fdate
+            }
+        }
+        else
+        {
+            return new Date()
+        }
     }
     else
-    if(timeq.includes("time <="))
     {
-        var ftboth = timeq.split("and")   
-        var fstr = (ftboth[0].replace("time >=", "")).trim()    
-        var tstr = (ftboth[1].replace("time <=", "")).trim()
-
-        var fdate = new Date(parseInt(fstr))
-        var tdate = new Date(parseInt(tstr))
-
-        return [fdate, tdate]             
-    }
-    else
-    {
-        var tstr = timeq.replace("time >=", "")
-        var ftime = tstr.replace("ms","").trim()
-        var fdate = new Date(parseInt(ftime))
-        return [fdate, new Date()]
+        var fstr;
+        if(instr.includes("time >="))
+        {
+            fstr = (instr.replace("time >=", "")).trim()
+        }
+        else
+        if(instr.includes("time <="))
+        {
+            fstr = (instr.replace("time <=", "")).trim()
+        }
+        var ftime = fstr.replace("ms","").trim()
+        return new Date(parseInt(ftime))
     }
 }
 
@@ -285,7 +280,6 @@ function extractTags(inq)
     
     return alltag
 }
-
 
 
 // Function Name  : interpretSelectQuery
@@ -338,7 +332,6 @@ function interpretSelectQuery(inq)
 // Function Name  : readFromInflux
 // Input Parameter: database name, Select clause, Group By Clause, [devId, idate, rdate], fromDate, toDate
 // Return Value   : Influx Data
-
 
 async function readFromInflux(rindex, dbinflux, selc, gbyc, devdata, fmdate, todate)
 {
@@ -401,11 +394,7 @@ async function readFromInflux(rindex, dbinflux, selc, gbyc, devdata, fmdate, tod
 
     var query = selc+"("+devid+")"+" AND "+timstr+gbyc
         
-    //var query = selc+"("+"\"devID\" = '"+devdata[0]+"')"+" AND "+timstr+gbyc
     influxset.qry = query
-
-    //console.log("Final Query: ", query)
-    console.log("Final Query: ",influxset)
 
     try{
         influxdata = await readdb.readInflux(influxset)
