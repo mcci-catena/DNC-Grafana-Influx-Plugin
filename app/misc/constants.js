@@ -1,12 +1,13 @@
 module.exports = Object.freeze({
-    //INFLUX_URL: "https://staging-iseechange.mcci.mobi/influxdb:8086",
-    INFLUX_URL: "https://staging-analytics.weradiate.com/influxdb:8086",
-    INFLUX_UNAME: "ezra",
-    INFLUX_PWD: "1millioncompost",
-
-    BASE_URL: "http://localhost:8893/",
-
-    DNC_TAGS : ["country", "state", "city", "ward", "street", "location", "devname"],
+    APP_NAME: "DNC Grafana Influx Plugin",
+    APP_VERSION: "1.0.0-4",
+    INFLUX_URL: "http://influxdb:8086",
+    INFLUX_UNAME: "******",
+    INFLUX_PWD: "*****",
+    APP_PORT: 8893,
+    
+    //BASE_URL: "http://localhost:8893/",
+    DNC_URL: "http://localhost:8891/",
 
     // Status Codes
     OK : 200,

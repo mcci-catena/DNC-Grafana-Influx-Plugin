@@ -5,7 +5,7 @@ const constants = require('../misc/constants.js');
 exports.tagVal = async function (req, res, influxd) {
 
     var options = {
-        url: constants.BASE_URL+"tagsv",
+        url: constants.DNC_URL+"tagsv",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         form: { 'influxd': influxd }
@@ -25,7 +25,5 @@ exports.tagVal = async function (req, res, influxd) {
                 res.sendStatus(401);
             }
         }
-    }
-
-    );
+    });
 }

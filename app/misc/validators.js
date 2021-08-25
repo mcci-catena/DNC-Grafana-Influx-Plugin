@@ -72,4 +72,3 @@ exports.validatedate = (inputText) => {
         return false;
     }
 }
-
