@@ -41,7 +41,7 @@ app.use(cors());
 
 global.reqCnt = 0;
 
-var server = app.listen(8893, function () {
+var server = app.listen(appconst.APP_PORT, function () {
     var host = server.address().address
     var port = server.address().port
     console.log(""+appconst.APP_NAME+" v"+appconst.APP_VERSION+" Listening http://%s:%s", host, port)
