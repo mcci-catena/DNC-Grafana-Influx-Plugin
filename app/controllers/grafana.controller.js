@@ -18,6 +18,8 @@ exports.gquery = async function (req, res) {
     
     var inq = req.body.q
 
+    //console.log("Query: ", inq)
+
     if(inq.includes("SHOW TAG KEYS"))
     {
         //console.log("\nGrafana QT-2")
