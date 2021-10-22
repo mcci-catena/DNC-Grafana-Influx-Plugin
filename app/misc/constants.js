@@ -24,7 +24,7 @@
 
 module.exports = Object.freeze({
     APP_NAME: "DNC Grafana Influx Plugin",
-    APP_VERSION: "1.0.0_4",
+    APP_VERSION: "1.0.0",
     INFLUX_URL: "http://influxdb:8086",
     INFLUX_UNAME: "******",
     INFLUX_PWD: "*****",
