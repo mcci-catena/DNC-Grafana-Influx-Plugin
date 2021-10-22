@@ -42,7 +42,7 @@ exports.gquery = async function (req, res) {
     
     var inq = req.body.q
 
-    console.log("\nQuery: ", inq)
+    //console.log("\nQuery: ", inq)
 
     if(inq.includes("SHOW TAG KEYS"))
     {
