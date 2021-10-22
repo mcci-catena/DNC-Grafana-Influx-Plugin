@@ -18,7 +18,7 @@
 #     Seenivasan V, MCCI Corporation February 2021
 #
 # Revision history:
-#     V1.0.0 Mon Aug 13 2021 11:24:35 seenivasan
+#     V1.0.0 Fri Oct 22 2021 11:24:35 seenivasan
 #       Module created
 ############################################################################*/
 
@@ -40,6 +40,7 @@ require('./app/version.js')(app);
 app.use(cors());
 
 global.reqCnt = 0;
+global.infKey = [];
 
 var server = app.listen(appconst.APP_PORT, function () {
     var host = server.address().address

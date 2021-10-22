@@ -1,3 +1,27 @@
+/*############################################################################
+# 
+# Module: grafana.measure.js
+#
+# Description:
+#     Endpoint implementation for Grafna measurement queries
+#
+# Copyright notice:
+#     This file copyright (c) 2021 by
+#
+#         MCCI Corporation
+#         3520 Krums Corners Road
+#         Ithaca, NY  14850
+#
+#     Released under the MCCI Corporation.
+#
+# Author:
+#     Seenivasan V, MCCI Corporation February 2021
+#
+# Revision history:
+#     V1.0.0 Fri Oct 22 2021 11:24:35 seenivasan
+#       Module created
+############################################################################*/
+
 var request = require('request');
 const readdb = require('./influx.js');
 
@@ -23,7 +47,10 @@ exports.measureVal = async (req, res, influxd) => {
     respdict["dnckey"] = dnckey
     respdict["taglist"] = []
 
+    //console.log("Query Influx: ", influxd)
+
     var tspan = extractTimeSpan(selq[2])
+    //console.log("Time conv: ", tspan[0], tspan[1])
     
     respdict["fdate"] = tspan[0]
     respdict["tdate"] = tspan[1]
@@ -70,13 +97,14 @@ function getDeviceList(ddict)
             if (error) 
             {
                 //console.log("Connection Error")
-                reject("DNC Server Connction Error")
+                reject("Connction Error")
             }
             else 
             {
                 if (resp.statusCode == 200)
                 {
                     var data = JSON.parse(resp.body);
+                    //console.log("Inside Get Device List: ",data)
                     ddict["dbdata"] = data.resdict.dbdata
                     ddict["dlist"] = data.resdict.devices
                     ddict["taglist"] = data.resdict.taglist
@@ -84,7 +112,7 @@ function getDeviceList(ddict)
                 }
                 else 
                 {
-                    console.log("DNC Server Error-2")
+                    console.log("Error-2")
                     reject("Error")
                 }
             }
@@ -153,91 +181,85 @@ function readDeviceData(ddict)
 // Example Input  : ['"state" = 'Tamil Nadu'', '"city" = 'Chennai'', '"state" = 'Karnataka'', '"city" = 'Bangalore'', '"ward" = 'Tambaram'' ]
 // Return value   : [{state: ['Tamil Nadu', 'Karnataka'], city: ['Chennai', 'Bangalore'], ward: ['Tambaram']}]
 
-
 function extractTimeSpan(timeq)
 {
-    if(timeq.includes("now() - "))
-    {
-        var fmdate = convertNow(timeq)
-        var todate = new Date()
-        return [fmdate, todate]
-    }
-    else
-    {
-        var qrstr = timeq.split("and")
-        var fmstr = qrstr[0]
-        var tostr = qrstr[1]
+    var qrstr = timeq.split("and")
+    var fmstr = qrstr[0]
+    var tostr = qrstr[1]
+    
+    var fmdate = convertDate(fmstr)
+    var todate = convertDate(tostr)
 
-        var fmdate = convertDate(fmstr)
-        var todate = convertDate(tostr)
-
-        return [fmdate, todate]
-    }
+    return [fmdate, todate]
 }
-
-function convertNow(instr)
-{
-    var fqstr = instr.split("now() - ")
-    var fstr = fqstr[1].trim()
-
-    if(fstr.includes("m"))
-    {
-        fstr.replace("m","")
-        var minutes = parseInt(fstr)
-        var fdate = new Date(new Date().getTime() - (minutes * 60 * 1000))
-        return fdate
-    }
-    else
-    if(fstr.includes("h"))
-    {
-        fstr.replace("h","")
-        var thr = parseInt(fstr)
-        var days = parseInt(thr/24)
-        var hrs = thr%24
-            
-        if(days > 0)
-        {
-            var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
-            if(hrs > 0)
-                fdate = new Date(fdate.getTime() - (hrs * 60 * 60 * 1000))
-
-            return fdate
-        }
-        else
-        {
-            var fdate = new Date(new Date().getTime() - (hrs * 60 * 60 * 1000))
-            return fdate
-        }
-    }
-    else
-    if(fstr.includes("d"))
-    {
-        fstr.replace("d","")
-        var days = parseInt(fstr)
-        var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
-        return fdate
-    }
-    else
-    {
-        return new Date()
-    }
-}
-
 
 function convertDate(instr)
 {
-    var fstr;
-    if(instr.includes("time >="))
+    if(instr.includes("now()"))
     {
-        fstr = (instr.replace("time >=", "")).trim()
+        if(instr.includes("now() - "))
+        {
+            var fqstr = instr.split("-")
+            var fstr = fqstr[1].trim()
+
+            if(fstr.includes("m"))
+            {
+                fstr.replace("m","")
+                var minutes = parseInt(fstr)
+                var fdate = new Date(new Date().getTime() - (minutes * 60 * 1000))
+                return fdate
+            }
+            else
+            if(fstr.includes("h"))
+            {
+                fstr.replace("h","")
+                var thr = parseInt(fstr)
+                var days = parseInt(thr/24)
+                var hrs = thr%24
+            
+                if(days > 0)
+                {
+                    var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
+                    if(hrs > 0)
+                        fdate = new Date(fdate.getTime() - (hrs * 60 * 60 * 1000))
+
+                    return fdate
+                }
+                else
+                {
+                    var fdate = new Date(new Date().getTime() - (hrs * 60 * 60 * 1000))
+                    return fdate
+                }
+            }
+            else
+            if(fstr.includes("d"))
+            {
+                fstr.replace("d","")
+                var days = parseInt(fstr)
+                var fdate = new Date(new Date().getTime() - (days * 24 * 60 * 60 * 1000))
+                return fdate
+            }
+        }
+        else
+        {
+            return new Date()
+        }
     }
     else
-    if(instr.includes("time <="))
     {
-        fstr = (instr.replace("time <=", "")).trim()
+        var fstr;
+        if(instr.includes("time >="))
+        {
+            fstr = (instr.replace("time >=", "")).trim()
+        }
+        else
+        if(instr.includes("time <="))
+        {
+            fstr = (instr.replace("time <=", "")).trim()
+        }
+        var ftime = fstr.replace("ms","").trim()
+        return new Date(parseInt(ftime))
     }
-    var ftime = fstr.replace("ms","").trim()
-    return new Date(parseInt(ftime))
 }
 
 

@@ -1,3 +1,27 @@
+/*############################################################################
+# 
+# Module: grafana.controller.js
+#
+# Description:
+#     Controller for Grafana Query handling
+#
+# Copyright notice:
+#     This file copyright (c) 2021 by
+#
+#         MCCI Corporation
+#         3520 Krums Corners Road
+#         Ithaca, NY  14850
+#
+#     Released under the MCCI Corporation.
+#
+# Author:
+#     Seenivasan V, MCCI Corporation February 2021
+#
+# Revision history:
+#     V1.0.0 Fri Oct 22 2021 11:24:35 seenivasan
+#       Module created
+############################################################################*/
+
 const tagkeyctrl = require('./grafana.tagkey.js');
 const tagvalctrl = require('./grafana.tagval.js');
 const measctrl = require('./grafana.measure.js');
@@ -18,7 +42,7 @@ exports.gquery = async function (req, res) {
     
     var inq = req.body.q
 
-    //console.log("Query: ", inq)
+    console.log("\nQuery: ", inq)
 
     if(inq.includes("SHOW TAG KEYS"))
     {
@@ -41,11 +65,11 @@ exports.gquery = async function (req, res) {
     {
         //console.log("\nGrafana QT-1")
         var influxset = {};
-	    influxset.server = constants.INFLUX_URL
-	    influxset.db = req.query.db
-	    influxset.qry = req.body.q
-	    influxset.user = constants.INFLUX_UNAME
-	    influxset.pwd = constants.INFLUX_PWD
+	influxset.server = constants.INFLUX_URL
+	influxset.db = req.query.db
+	influxset.qry = req.body.q
+	influxset.user = constants.INFLUX_UNAME
+	influxset.pwd = constants.INFLUX_PWD
         
         readMeasurement(res, influxset)
     }
