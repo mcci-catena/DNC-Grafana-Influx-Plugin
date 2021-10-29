@@ -18,7 +18,7 @@
 #     Seenivasan V, MCCI Corporation February 2021
 #
 # Revision history:
-#     V1.0.3 Wed Feb 23 2021 11:24:35 seenivasan
+#     V1.0.0 Fri Oct 22 2021 11:24:35 seenivasan
 #       Module created
 ############################################################################*/
 
@@ -27,6 +27,8 @@ const request = require('request');
 exports.readInflux = (indata) => {
     return new Promise(function(resolve, reject) {
         query = ""+indata.server+"/query?db="+indata.db+"&q="+indata.qry
+
+        console.log("\nFinal Query: ", query)
 
         request.get(query,
             {'auth': {'user': indata.user, 'pass': indata.pwd, 'sendImmediately': false } },
