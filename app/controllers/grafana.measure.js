@@ -183,10 +183,20 @@ function readDeviceData(ddict)
 
 function extractTimeSpan(timeq)
 {
-    var qrstr = timeq.split("and")
-    var fmstr = qrstr[0]
-    var tostr = qrstr[1]
-    
+    var fmstr, tostr, fmdate, todate
+
+    if(timeq.includes("and"))
+    {
+        var qrstr = timeq.split("and")
+        fmstr = qrstr[0]
+        tostr = qrstr[1]
+    }
+    else
+    {
+        fmstr = timeq
+        tostr = "time <= "+new Date().getTime()+"ms"
+    }
+
     var fmdate = convertDate(fmstr)
     var todate = convertDate(tostr)
 
