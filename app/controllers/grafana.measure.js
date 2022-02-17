@@ -118,7 +118,6 @@ function getDeviceList(ddict)
                 {
                     var data = JSON.parse(resp.body);
                     ddict["dbdata"] = data.resdict.dbdata
-                    ddict["dbdata"]["url"] = "https://www.cornellsaprun.com/influxdb:8086/"
                     ddict["dlist"] = data.resdict.devices
                     ddict["taglist"] = data.resdict.taglist
                     resolve(ddict)
