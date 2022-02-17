@@ -27,16 +27,17 @@ var request = require('request');
 const constants = require('../misc/constants.js');
 const readdb = require('./influx.js');
 
+
 exports.tagKey = async function (req, res, influxd) {
 
     if(global.infKey.length >= 0)
     {
         var influxset = {};
-	influxset.server = constants.INFLUX_URL
-	influxset.db = req.query.db
-	influxset.qry = req.body.q
-	influxset.user = constants.INFLUX_UNAME
-	influxset.pwd = constants.INFLUX_PWD
+        influxset.server = constants.INFLUX_URL
+        influxset.db = req.query.db
+        influxset.qry = req.body.q
+        influxset.user = constants.INFLUX_UNAME
+        influxset.pwd = constants.INFLUX_PWD
         
         readMeasurement(influxset)
     }
@@ -51,7 +52,7 @@ exports.tagKey = async function (req, res, influxd) {
 
     request(options, function (error, resp, body) {
         if (error) {
-            console.log("Connect to DNC failed")
+            //console.log("Connect to DNC failed")
             res.status(500).send('Connect to DNC failed!');
         }
 
@@ -68,11 +69,15 @@ exports.tagKey = async function (req, res, influxd) {
                 serdict["name"] = "HeatData";
                 serdict["columns"] = ["tagKey"];
                 serdict["values"] = data.message;
+                serdict["values"].push("Topic")
+                serdict["values"].push("TreesUihlein")
+                serdict["values"].push("TreesArnot")
+                serdict["values"].push("TreesUVM")
                 
-                for(let i=0; i<global.infKey.length; i++)
+                /*for(let i=0; i<global.infKey.length; i++)
                 {
                     serdict["values"].push(global.infKey[i])
-                }
+                }*/
 
                 resdict["statement_id"] = 0;
                 resdict["series"] = [serdict];
@@ -104,7 +109,7 @@ async function readMeasurement(indata)
            {
                global.infKey = []
                global.infKey.push(" - - - ")
-               //console.log("\nInfKey: ", influxdata.results[0].series[0].values)
+               
                for(let i=0; i<reskey.length; i++)
                {
                    global.infKey.push(reskey[i])

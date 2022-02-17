@@ -26,28 +26,58 @@ var request = require('request');
 
 const constants = require('../misc/constants.js');
 
+const topic = ["Gallons/Tree", "Gallons/Hr", "Total Gallons"]
+const trees = ["1000", "2000", "3000"];
+
+
+
 exports.tagVal = async function (req, res, influxd) {
 
-    var options = {
-        url: constants.DNC_URL+"tagsv",
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        form: { 'influxd': influxd }
-    };
+    if(req.body.q.includes("Trees") || req.body.q.includes("Topic"))
+    {
+        serdict = {};
+        resdict = {};
+        findict = {};
 
-    request(options, function (error, resp, body) {
-        if (error) {
-            res.status(500).send('Connect to DNC failed!');
+        if(req.body.q.includes("Trees")) {
+            serdict["values"] = trees
+        }
+        else
+        {
+            serdict["values"] = topic;
         }
 
-        else {
-            if (resp.statusCode == 200) {
-                res.status(200).send(body);
-            }
+        resdict["statement_id"] = 0;
+        resdict["series"] = [serdict];
 
+        findict["results"] = [resdict];
+
+        res.status(200).send(findict);
+        
+    }
+    else
+    {
+        var options = {
+            url: constants.DNC_URL+"tagsv",
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            form: { 'influxd': influxd }
+        };
+    
+        request(options, function (error, resp, body) {
+            if (error) {
+                res.status(500).send('Connect to DNC failed!');
+            }
+    
             else {
-                res.sendStatus(401);
+                if (resp.statusCode == 200) {
+                    res.status(200).send(body);
+                }
+    
+                else {
+                    res.sendStatus(401);
+                }
             }
-        }
-    });
+        });
+    } 
 }

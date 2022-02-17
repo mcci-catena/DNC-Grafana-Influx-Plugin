@@ -27,6 +27,10 @@ const readdb = require('./influx.js');
 
 const constants = require('../misc/constants.js');
 
+const othertags = ["Topic", "TreesUihlein", "TreesArnot", "TreesUVM"]
+
+
+
 exports.measureVal = async (req, res, influxd) => {
     reqCnt ++
     var dnckey = {}
@@ -43,14 +47,24 @@ exports.measureVal = async (req, res, influxd) => {
         var tagall = extractTags(ql)
         dnckey = tagall[0]
     }
+    
+    var otags = {}
+
+    for(const[key, value] of Object.entries(dnckey))
+    {
+        if(othertags.includes(key))
+        {
+            otags[key] = value
+            delete dnckey[key]
+        }
+        
+    }
 
     respdict["dnckey"] = dnckey
     respdict["taglist"] = []
-
-    //console.log("Query Influx: ", influxd)
-
+    respdict["otags"] = otags
+ 
     var tspan = extractTimeSpan(selq[2])
-    //console.log("Time conv: ", tspan[0], tspan[1])
     
     respdict["fdate"] = tspan[0]
     respdict["tdate"] = tspan[1]
@@ -85,7 +99,7 @@ function getDeviceList(ddict)
         dncdict["fdate"] = ddict["fdate"]
         dncdict["tdate"] = ddict["tdate"]
         dncdict["dnckey"] = ddict["dnckey"] 
-
+        
         var options = {
             url: constants.DNC_URL+"dlist",
             method: 'POST',
@@ -96,7 +110,6 @@ function getDeviceList(ddict)
         request(options, function (error, resp, body) {
             if (error) 
             {
-                //console.log("Connection Error")
                 reject("Connction Error")
             }
             else 
@@ -104,8 +117,8 @@ function getDeviceList(ddict)
                 if (resp.statusCode == 200)
                 {
                     var data = JSON.parse(resp.body);
-                    //console.log("Inside Get Device List: ",data)
                     ddict["dbdata"] = data.resdict.dbdata
+                    ddict["dbdata"]["url"] = "https://www.cornellsaprun.com/influxdb:8086/"
                     ddict["dlist"] = data.resdict.devices
                     ddict["taglist"] = data.resdict.taglist
                     resolve(ddict)
@@ -161,7 +174,32 @@ function readDeviceData(ddict)
                  
                 tagdict["latitude"] = ddict["dlist"][i].location[0]
                 tagdict["longitude"] = ddict["dlist"][i].location[1]
+                
                 indict["tags"] = tagdict
+                console.log("### Response from InfluxDB ###")
+
+                console.log(indict["values"].length)
+                
+                indict["otags"] = ddict["otags"]
+                if(Object.keys(indict["otags"]).includes("Topic"))
+                {
+                    if(indict["otags"]["Topic"].includes("Gallons/Tree"))
+                    {
+                        var fval = await doGallonsByTree(indict)
+                        indict["values"] = [fval]
+                    }
+                    else
+                    if(indict["otags"]["Topic"].includes("Gallons/Hr"))
+                    {
+                        var fval = await doGallonsPerHr(indict)
+                    }
+                    else
+                    if(indict["otags"]["Topic"].includes("Total Gallons"))
+                    {
+                        var fval = await doTotalGallons(indict)
+                        indict["values"] = [fval]
+                    }
+                }
                 ddict["sarr"].push(indict)
             }
         }
@@ -170,11 +208,48 @@ function readDeviceData(ddict)
         resdict["series"] = ddict["sarr"]
         findict = {}
         findict["results"] = [resdict]
+        console.log("*** Sending Response ***")
         ddict["res"].status(200).send(findict); 
         resolve()
     });
 }
 
+
+async function doGallonsByTree(inpdict)
+{
+    var sum = 0;
+    var fdate;
+    var location = indict["tags"]["Location"]
+        
+    for(i=0; i<indict["values"].length; i++)
+    {
+        sum = sum + inpdict["values"][i][1]
+        fdate = inpdict["values"][i][0]
+    }
+
+    var trees = indict["otags"]["Trees"+location]
+    sum = sum / trees
+    return [fdate, sum]
+}
+
+async function doGallonsPerHr(inpdict)
+{
+    
+}
+
+
+async function doTotalGallons(inpdict)
+{
+    var sum = 0;
+    var fdate;
+
+    for(i=0; i<indict["values"].length; i++)
+    {
+        sum = sum + inpdict["values"][i][1]
+        fdate = inpdict["values"][i][0]
+    }
+    return [fdate, sum]
+}
 
 // Function Name  : extractTimeSpan
 // Input Parameter: Array of Objects
