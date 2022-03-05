@@ -65,11 +65,11 @@ exports.gquery = async function (req, res) {
     {
         //console.log("\nGrafana QT-1")
         var influxset = {};
-	influxset.server = constants.INFLUX_URL
-	influxset.db = req.query.db
-	influxset.qry = req.body.q
-	influxset.user = constants.INFLUX_UNAME
-	influxset.pwd = constants.INFLUX_PWD
+        influxset.server = constants.INFLUX_URL
+        influxset.db = req.query.db
+        influxset.qry = req.body.q
+        influxset.user = constants.INFLUX_UNAME
+        influxset.pwd = constants.INFLUX_PWD
         
         readMeasurement(res, influxset)
     }

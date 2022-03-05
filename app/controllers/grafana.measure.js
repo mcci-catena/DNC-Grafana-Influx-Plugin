@@ -79,6 +79,14 @@ exports.measureVal = async (req, res, influxd) => {
     respdict["res"] = res
     respdict["sarr"] = []
 
+    if(Object.keys(otags).includes("Topic")) {
+        if(otags["Topic"].includes("Sap Sweetness")) {
+            console.log("Sap Sweetness")
+            getSapSweetness(res)
+            return
+        }
+    }
+
     let gdict = {}
     try{
         gdict = await getDeviceList(respdict)
@@ -139,22 +147,26 @@ function getDeviceList(ddict)
 // Required Input : dbName, selectClause, groupByClause, [devID, idate, rdate], fromDate, toDate
 // Fetch data for each device, collect all response and send data to Grafana(request) as a single response
 // Return value   : None
+// ddict keys: influxd, dnckey, taglist, otags, fdate, tdate, strsc, strgbc, dlist, res, sarr, dbdata
+// dlist contains array of devices for the selected DNC Tags
 
-function readDeviceData(ddict)
-{
+function readDeviceData(ddict){
     return new Promise(async function(resolve, reject) {
-        for(var i=0; i<ddict["dlist"].length; i++)
-        {
-            var rval = await readFromInflux(ddict["id"], ddict.dbdata, ddict["strsc"], ddict["strgbc"], ddict["dlist"][i], ddict["fdate"], ddict["tdate"])
 
-            sindex = rval[0]
-            infres = rval[1]
+        var topic = getFunctionName(ddict["otags"])
+        var brixval
 
-            //dicout = JSON.parse(infres)
-            dicout = infres
+        if(syrupRequested) {
+            brixval = await brixvalctrl.brixVal(true)
+            console.log("Syrup needed, read Brix data done.")
+        }
 
-            if(dicout.results[0].hasOwnProperty("series"))
-            {
+        for(var i=0; i<ddict["dlist"].length; i++) {
+
+            var rval = await readFromInflux(ddict["id"], ddict.dbdata, ddict["strsc"], ddict["strgbc"], 
+                                            ddict["dlist"][i], ddict["fdate"], ddict["tdate"])
+            let dicout = rval[1]
+            if(dicout.results[0].hasOwnProperty("series")) {
                 indict = dicout.results[0].series[0]
                 tagdict = {}
 
@@ -175,30 +187,16 @@ function readDeviceData(ddict)
                 tagdict["longitude"] = ddict["dlist"][i].location[1]
                 
                 indict["tags"] = tagdict
-                console.log("### Response from InfluxDB ###")
-
-                console.log(indict["values"].length)
-                
                 indict["otags"] = ddict["otags"]
-                if(Object.keys(indict["otags"]).includes("Topic"))
-                {
-                    if(indict["otags"]["Topic"].includes("Gallons/Tree"))
-                    {
-                        var fval = await doGallonsByTree(indict)
-                        indict["values"] = [fval]
-                    }
-                    else
-                    if(indict["otags"]["Topic"].includes("Gallons/Hr"))
-                    {
-                        var fval = await doGallonsPerHr(indict)
-                    }
-                    else
-                    if(indict["otags"]["Topic"].includes("Total Gallons"))
-                    {
-                        var fval = await doTotalGallons(indict)
-                        indict["values"] = [fval]
-                    }
+                indict["brixval"] = brixval
+
+                let fval = await doSapFunction(indict, topic)
+                
+                if(fval != null) {
+                    console.log("Move values")
+                    indict["values"] = [fval]
                 }
+
                 ddict["sarr"].push(indict)
             }
         }
@@ -214,41 +212,166 @@ function readDeviceData(ddict)
 }
 
 
-async function doGallonsByTree(inpdict)
-{
-    var sum = 0;
-    var fdate;
-    var location = indict["tags"]["Location"]
-        
-    for(i=0; i<indict["values"].length; i++)
+async function getSapSweetness(res) {
+    let arnotdict = {}
+    let uihleindict = {}
+    let uvmdict = {}
+
+    let arnottags = {}
+    let uihleintags = {}
+    let uvmtags = {}
+
+    arnotdict["name"] = "SapSweetness"
+    arnotdict["columns"] = ["time", "mean"]
+    arnottags["location"] = "Arnot"
+    arnottags["Area"] = "Indoor"
+    arnotdict["tags"] = arnottags
+
+    uihleindict["name"] = "SapSweetness"
+    uihleindict["columns"] = ["time", "mean"]
+    uihleintags["location"] = "Uihlein"
+    uihleintags["Area"] = "Indoor"
+    uihleindict["tags"] = uihleintags
+
+    uvmdict["name"] = "SapSweetness"
+    uvmdict["columns"] = ["time", "mean"]
+    uvmtags["location"] = "UVM"
+    uvmtags["Area"] = "Indoor"
+    uvmdict["tags"] = uvmtags
+    
+    let brixval = await brixvalctrl.brixVal(false)
+
+    let arnot = []
+    let uihlein = []
+    let uvm = []
+
+    for(let i=0; i< brixval.length; i++)
     {
-        sum = sum + inpdict["values"][i][1]
-        fdate = inpdict["values"][i][0]
+        arnot.push([brixval[i]["rdate"], brixval[i]["Arnot"]])
+        uihlein.push([brixval[i]["rdate"], brixval[i]["Uihlein"]])
+        uvm.push([brixval[i]["rdate"], brixval[i]["UVM"]])
     }
 
-    var trees = indict["otags"]["Trees"+location]
+    arnotdict["values"] = arnot
+    uihleindict["values"] = uihlein
+    uvmdict["values"] = uvm
+
+    let seriesdict = []
+    seriesdict.push(arnotdict)
+    seriesdict.push(uihleindict)
+    seriesdict.push(uvmdict)
+
+    let resdict = {}
+    resdict["statement_id"] = 0
+    resdict["series"] = seriesdict
+
+    let findict = {}
+    findict["results"] = [resdict]
+
+    res.status(200).send(findict); 
+}
+
+function syrupRequested(otagDict) {
+    if(Object.keys(otagDict).includes("Topic")) {
+        if(otagDict["Topic"].includes("Syrup per Tap")) {
+            return true
+        }
+    }
+    return false
+}
+
+function getFunctionName(otagDict) {
+    if(Object.keys(otagDict).includes("Topic")) {
+        if(otagDict["Topic"].includes("Syrup per Tap")) {
+            return syrupPerTap
+        }  
+        else
+        if(otagDict["Topic"].includes("Gallons/Tree")){
+            return gallonsPerTree
+        }
+        else
+        if(otagDict["Topic"].includes("Gallons/Hr")){
+            return gallonPerHour
+        }
+        else
+        if(otagDict["Topic"].includes("Total Gallons")){
+            return totalGallons
+        }
+    }
+    return noSapRequested
+}
+
+const doSapFunction = function (sapDict, logic) {
+    return logic(sapDict)
+} 
+
+const noSapRequested = async function(sapDict) {
+    return null
+}
+
+const gallonsPerTree = async function(sapDict) {
+    let sum = 0;
+    let fdate;
+    let location = sapDict["tags"]["Location"]
+        
+    for(let i=0; i<sapDict["values"].length; i++)
+    {
+        sum = sum + sapDict["values"][i][1]
+        fdate = sapDict["values"][i][0]
+    }
+
+    let trees = sapDict["otags"]["Trees"+location]
     sum = sum / trees
     return [fdate, sum]
 }
 
-async function doGallonsPerHr(inpdict)
-{
-    
+const gallonPerHour = async function(sapDict) {
+    return null
 }
 
+const totalGallons = async function(sapDict) {
+    let sum = 0;
+    let fdate;
 
-async function doTotalGallons(inpdict)
-{
-    var sum = 0;
-    var fdate;
-
-    for(i=0; i<indict["values"].length; i++)
+    for(let i=0; i<sapDict["values"].length; i++)
     {
-        sum = sum + inpdict["values"][i][1]
-        fdate = inpdict["values"][i][0]
+        sum = sum + sapDict["values"][i][1]
+        fdate = sapDict["values"][i][0]
     }
     return [fdate, sum]
 }
+
+const syrup = function (sapVal, brixVal) {
+    return sapVal / ((87.1 / brixVal) - 0.32)
+}
+
+const syrupPerTap = async function(sapDict) {
+    let sum = 0;
+    let fdate;
+    let location = sapDict["tags"]["Location"]
+    let sapFiltData = sapDict["values"].filter(removeNull)
+
+    //let syrupData = []
+
+    if(sapFiltData.length > 0) {
+        for(let i=0; i< sapFiltData.length; i++) {
+            let nsyrup = []
+            let bdate = sapFiltData[i][0].split("T")
+            let bindex = sapDict["brixval"].map(e=> e.rdate).indexOf(bdate[0])
+            let brixd = sapDict["brixval"][bindex][location]
+            sum = sum + syrup(sapFiltData[i][1], brixd)
+            fdate = sapDict["values"][i][0]
+            //syrupData.push([sapFiltData[i][0], syrup(sapFiltData[i][1], brixd)])
+        }
+    }
+
+    return [fdate, sum]
+}
+
+function removeNull(adata){
+    return adata[1] != null && adata[1] != 0;
+}
+
 
 // Function Name  : extractTimeSpan
 // Input Parameter: Array of Objects

@@ -26,7 +26,7 @@ var request = require('request');
 
 const constants = require('../misc/constants.js');
 
-const topic = ["Gallons/Tree", "Gallons/Hr", "Total Gallons"]
+const topic = ["Gallons/Tree", "Gallons/Hr", "Total Gallons", "Syrup per Tap", "Sap Sweetness"]
 const trees = ["1000", "2000", "3000"];
 
 
