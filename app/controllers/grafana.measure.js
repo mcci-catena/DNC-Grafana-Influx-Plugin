@@ -26,6 +26,7 @@ var request = require('request');
 const readdb = require('./influx.js');
 
 const constants = require('../misc/constants.js');
+const brixvalctrl = require('./grafana.brixval.js');
 
 const othertags = ["Topic", "TreesUihlein", "TreesArnot", "TreesUVM"]
 
@@ -247,9 +248,9 @@ async function getSapSweetness(res) {
 
     for(let i=0; i< brixval.length; i++)
     {
-        arnot.push([brixval[i]["rdate"], brixval[i]["Arnot"]])
-        uihlein.push([brixval[i]["rdate"], brixval[i]["Uihlein"]])
-        uvm.push([brixval[i]["rdate"], brixval[i]["UVM"]])
+        arnot.push([brixval[i]["rdate"], parseFloat(brixval[i]["Arnot"])])
+        uihlein.push([brixval[i]["rdate"], parseFloat(brixval[i]["Uihlein"])])
+        uvm.push([brixval[i]["rdate"], parseFloat(brixval[i]["UVM"])])
     }
 
     arnotdict["values"] = arnot
@@ -363,6 +364,8 @@ const syrupPerTap = async function(sapDict) {
             fdate = sapDict["values"][i][0]
             //syrupData.push([sapFiltData[i][0], syrup(sapFiltData[i][1], brixd)])
         }
+        let trees = sapDict["otags"]["Trees"+location]
+        sum = sum / trees
     }
 
     return [fdate, sum]
