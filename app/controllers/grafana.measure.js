@@ -359,7 +359,13 @@ const syrupPerTap = async function(sapDict) {
             let nsyrup = []
             let bdate = sapFiltData[i][0].split("T")
             let bindex = sapDict["brixval"].map(e=> e.rdate).indexOf(bdate[0])
-            let brixd = sapDict["brixval"][bindex][location]
+            let brixd
+            try{
+                brixd = sapDict["brixval"][bindex][location]
+            }
+            catch{
+                brixd = 0
+            }
             sum = sum + syrup(sapFiltData[i][1], brixd)
             fdate = sapDict["values"][i][0]
             //syrupData.push([sapFiltData[i][0], syrup(sapFiltData[i][1], brixd)])
