@@ -104,7 +104,7 @@ async function readMeasurement(indata)
            {
                global.infKey = []
                global.infKey.push(" - - - ")
-               //console.log("\nInfKey: ", influxdata.results[0].series[0].values)
+               
                for(let i=0; i<reskey.length; i++)
                {
                    global.infKey.push(reskey[i])

@@ -42,35 +42,35 @@ exports.gquery = async function (req, res) {
     
     var inq = req.body.q
 
-    //console.log("\nQuery: ", inq)
+    console.log("\nQuery: ", inq)
 
     if(inq.includes("SHOW TAG KEYS"))
     {
-        //console.log("\nGrafana QT-2")
+        // console.log("\nGrafana Show Tag Keys")
         tagkeyctrl.tagKey(req, res, influxd)
     }
     else
     if(inq.includes("SHOW TAG VALUES"))
     {
-        //console.log("\nGrafana QT-3")
+        // console.log("\nGrafana Show Tag Values")
         tagvalctrl.tagVal(req, res, influxd)
     }
     else
     if(inq.includes("SELECT"))
     {
-        //console.log("\nGrafana QT-4New")
+        // console.log("\nGrafana Select")
         measctrl.measureVal(req, res, influxd)
     }
     else
     {
-        //console.log("\nGrafana QT-1")
+        // console.log("\nGrafana Other")
         var influxset = {};
-	influxset.server = constants.INFLUX_URL
-	influxset.db = req.query.db
-	influxset.qry = req.body.q
-	influxset.user = constants.INFLUX_UNAME
-	influxset.pwd = constants.INFLUX_PWD
-        
+        influxset.server = constants.INFLUX_URL
+        influxset.db = req.query.db
+        influxset.qry = req.body.q
+        influxset.user = constants.INFLUX_UNAME
+        influxset.pwd = constants.INFLUX_PWD
+
         readMeasurement(res, influxset)
     }
 }

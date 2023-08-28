@@ -20,19 +20,23 @@
 # Revision history:
 #     V1.0.1 Fri Oct 22 2021 11:24:35 seenivasan
 #       Module created
+
+# WR : ezra
+# Pass: 1millioncompost
+# CL: seenivasanv
+# Pass: Don'tforget
 ############################################################################*/
 
 module.exports = Object.freeze({
-    APP_NAME: "DNC Grafana Influx Plugin",
-    APP_VERSION: "1.0.2",
+    APP_NAME: "DNC Grafana Influx Plugin V2",
+    APP_VERSION: "2.0.0",
     INFLUX_URL: "http://influxdb:8086",
-    INFLUX_UNAME: "******",
-    INFLUX_PWD: "*****",
+    INFLUX_UNAME: "admin",
+    INFLUX_PWD: "admin",
     APP_PORT: 8893,
-    
-    //BASE_URL: "http://localhost:8893/",
-    DNC_URL: "http://localhost:8891/",
 
+    DNC_URL: "http://localhost:8891/",
+    
     // Status Codes
     OK : 200,
     Not_found : 404,

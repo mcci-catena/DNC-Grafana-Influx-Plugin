@@ -24,73 +24,247 @@
 
 var request = require('request');
 const readdb = require('./influx.js');
-
 const constants = require('../misc/constants.js');
 
-exports.measureVal = async (req, res, influxd) => {
-    reqCnt ++
-    var dnckey = {}
-    var respdict = {}
-
-    respdict["influxd"] = influxd
+exports.measureVal = async (req, res, gquery) => {
     
-    var selq = interpretSelectQuery(req.body.q)
+    // console.log("Select Query Received ....")
 
-    if(selq[1] != null)
+    let grdict = {}                                      // Global Request Dict
+    grdict["qresp"] = res                                // Query's response object
+    grdict["qlist"] = checkForMultiple(req.body.q)       // Query List                              
+    grdict["bqlist"] = []                                // Broken Query List
+    grdict["dnc"] = []                                   // To hold DNC Data
+    grdict["mdnc"] = []
+    
+    for(let i=0; i<grdict.qlist.length; i++){
+        grdict.bqlist.push(parseInfluxQuery(grdict.qlist[i]))
+    }
+
+    // replace where
+    for(let i=0; i<grdict.bqlist.length; i++){
+        let dncdict = {}
+        dncdict["select"] = extractselecttag(grdict.bqlist[i]["SELECT"])
+        dncdict["tags"] = extractwheretags(grdict.bqlist[i]["WHERE"])
+        dncdict["time"] = extractTimeSpan(grdict.bqlist[i]["AND"])
+        dncdict["orgname"] = gquery.uname
+        grdict.dnc.push(dncdict)
+    }
+
+    let promisearr = []
+
+    for(let i=0; i<grdict.qlist.length; i++){
+        let dnctags = Object.keys(grdict.dnc[i].tags)
+        if(dnctags.length > 0){
+            promisearr.push(getdncdevicemap(grdict.dnc[i]))
+        }
+    }
+
+    const dmpromises = Promise.allSettled(promisearr);
+    const statuses = await dmpromises;
+    for(let rstatus of statuses){
+        if(rstatus.status == 'fulfilled'){
+            grdict.mdnc.push(rstatus.value)
+        }
+        else{
+            console.log("BG Resp: ", rstatus)
+        }
+    }
+
+    if(grdict.mdnc.length == 0){
+        return res.status(502).send("Bad Gateway") 
+    }
+
+    for(let i=0; i<grdict.mdnc.length; i++){
+        compileinfquery(grdict.mdnc[i], grdict.bqlist[i])
+    }
+
+    let ifdict = []
+    for(let i=0; i<grdict.mdnc.length; i++){
+        let dqdict = {}
+        dqdict["tags"] = grdict.mdnc[i].tags
+        dqdict["devices"] = []
+        for(let j=0; j<grdict.mdnc[i].devices.length; j++){
+            dqdict.devices.push(
+                {qry: grdict.mdnc[i].devices[j].qry, 
+                infdb: grdict.mdnc[i].devices[j].indb,
+                tags: grdict.mdnc[i].dtags[grdict.mdnc[i].devices[j].sid]
+            })
+        }
+        ifdict.push(dqdict)
+    }
+
+    let sdpromisearr = []
+
+    for(let i=0; i<ifdict.length; i++){
+        for(let j=0; j<ifdict[i].devices.length; j++){
+            let infdict = {}
+            infdict["tags"] = ifdict[i].devices[j].tags
+            infdict["qid"] = {mq: i+1, cq: j+1}
+            infdict["qry"] = ifdict[i].devices[j].qry
+            infdict["infdb"] = ifdict[i].devices[j].infdb
+            sdpromisearr.push(readdb.readSensorInflux(infdict))
+        }
+    }
+
+    const sdpromises = Promise.allSettled(sdpromisearr);
+    const dstatuses = await sdpromises;
+
+    let gresult = []
+
+    for(let rstatus of dstatuses){
+        if(rstatus.status == 'fulfilled'){
+            gresult.push(rstatus.value)
+        }
+        else{
+            console.log("Failed: --> ", rstatus.reason)
+        }
+    }
+
+    let gres = arrangeResults(gresult)
+
+    res.status(200).send({results: gres}) 
+}
+
+
+function arrangeResults(sdlist){
+    // console.log("Arrange Result: ", sdlist)
+    let findict = {}
+    for(let i=0; i<sdlist.length; i++){
+        let mk = Object.keys(sdlist[i])[0]
+        let ck = Object.keys(sdlist[i][mk])[0]
+        if(!(mk in findict)){
+            findict[mk] = []
+        }
+        findict[mk].push(sdlist[i][mk][ck])
+    }
+
+    // console.log(findict)
+    let fkeys = Object.keys(findict)
+
+    let rmarr = []   // response master array
+
+    for(let i=0; i<fkeys.length; i++){
+        let rsqdict = {}         // Single query data holder (single query may contains many devices)
+        rsqdict["statement_id"] = 0
+        
+        let rsqdarr = []      // Single query data holder array of devices
+        let infresarr = findict[fkeys[i]]
+        for(let j=0; j<infresarr.length; j++){
+            let sddict = {}     // Single Device Data holder
+           
+            let infresobj = infresarr[j].data.results[0]
+           
+            if(infresobj.hasOwnProperty("series")){
+                let infddata = infresobj.series[0]
+                sddict["name"] = infddata.name
+                sddict["columns"] = infddata.columns
+                sddict["tags"] = infresarr[j].tags
+                sddict["values"] = infddata.values
+                rsqdarr.push(sddict)
+            }
+            else{
+                console.log("Series not present")
+            }
+        }
+
+        if(rsqdarr.length > 0){
+            rsqdict["series"] = rsqdarr
+        }
+       
+        rmarr.push(rsqdict)
+    }
+
+    return rmarr
+}
+
+
+function checkForMultiple(inq){
+    // console.log("Check for multiple")
+    return mulq = inq.split(";")
+}
+
+
+function parseInfluxQuery(inpq){
+    var tagstr, timstr, lmtstr
+
+    var resstr = inpq.split("WHERE")
+    var fdbstr = resstr[0].trim()
+    
+    var str2 = resstr[1].split("GROUP BY")
+    var part2 = str2[0].trim()
+    
+    var str3 = str2[1].split("LIMIT")
+    var gbystr = str3[0].trim()
+
+    if(str3.length > 1){
+        lmtstr = str3[1].trim()
+    }
+    else{
+        lmtstr = null
+    }
+    
+    if(part2.startsWith("("))
     {
-        var nq = selq[1].replace(new RegExp("AND", 'g'), "OR")
+        tag_flg = 1
+        var tagpart = part2.split("time >=")
+        var tagstr1 = tagpart[0].split(")")
+
+        tagstr = tagstr1[0].replace("(","").trim()
+        timstr = "time >="+tagpart[1]
+
+    }
+    else
+    {
+        tagstr = null
+        timstr = part2.trim()
+    }
+
+    let sqdict = {}
+    sqdict["SELECT"] = fdbstr
+    sqdict["WHERE"] = tagstr
+    sqdict["AND"] = timstr
+    sqdict["GROUPBY"] = gbystr
+    sqdict["LIMIT"] = lmtstr
+    
+    return sqdict
+}
+
+
+function extractselecttag(seltag){
+    // console.log("Extract sel tags: ", seltag)
+
+    let str1 = seltag.split("SELECT")
+    let str2 = str1[1].split("FROM")
+    return str2[0].trim()
+
+}
+
+function extractwheretags(dnctags){
+    var dnckey = {}
+    
+    if(dnctags != null)
+    {
+        var nq = dnctags.replace(new RegExp("AND", 'g'), "OR")
         var ql = nq.split("OR")
         var tagall = extractTags(ql)
         dnckey = tagall[0]
     }
-
-    respdict["dnckey"] = dnckey
-    respdict["taglist"] = []
-
-    //console.log("Query Influx: ", influxd)
-
-    var tspan = extractTimeSpan(selq[2])
-    //console.log("Time conv: ", tspan[0], tspan[1])
-    
-    respdict["fdate"] = tspan[0]
-    respdict["tdate"] = tspan[1]
-
-    var strsc = selq[0]+" WHERE "
-    var strgbc = "GROUP BY "+selq[3]
-
-    respdict["strsc"] = strsc
-    respdict["strgbc"] = strgbc
-
-    respdict["dlist"] = []
-    respdict["res"] = res
-    respdict["sarr"] = []
-
-    let gdict = {}
-    try{
-        gdict = await getDeviceList(respdict)
-        await readDeviceData(gdict) 
-    }catch(err){
-        respdict["res"].status(400).send();    
-    }
+ 
+    return dnckey
 }
 
 
-function getDeviceList(ddict)
+function getdncdevicemap(ddict)
 {
     return new Promise(async function(resolve, reject) {
         var darr = []
 
-        dncdict = {}
-        dncdict["influxd"] = ddict["influxd"]
-        dncdict["fdate"] = ddict["fdate"]
-        dncdict["tdate"] = ddict["tdate"]
-        dncdict["dnckey"] = ddict["dnckey"] 
-
         var options = {
-            url: constants.DNC_URL+"dlist",
+            url: constants.DNC_URL+"gdlist",
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            form: { 'dncd': dncdict }
+            form: { 'dncd': ddict }
         };
 
         request(options, function (error, resp, body) {
@@ -104,16 +278,20 @@ function getDeviceList(ddict)
                 if (resp.statusCode == 200)
                 {
                     var data = JSON.parse(resp.body);
-                    //console.log("Inside Get Device List: ",data)
-                    ddict["dbdata"] = data.resdict.dbdata
-                    ddict["dlist"] = data.resdict.devices
-                    ddict["taglist"] = data.resdict.taglist
-                    resolve(ddict)
+                    resolve(data.message)
                 }
                 else 
                 {
-                    console.log("Error-2")
-                    reject("Error")
+                    if(resp.statusCode == 502)    // Bad Gateway , backend not available
+                    {
+                        reject("Bad Gateway")
+                    }
+                    else{
+                        var data = JSON.parse(resp.body);
+                        reject(data.message)
+                    }
+                    console.log("Error-2: ", resp.statusCode)
+                    
                 }
             }
         });
@@ -122,59 +300,55 @@ function getDeviceList(ddict)
 }
 
 
-// Function Name  : readDeviceData
-// Input Parameter: request, response buffer
-// Required Input : dbName, selectClause, groupByClause, [devID, idate, rdate], fromDate, toDate
-// Fetch data for each device, collect all response and send data to Grafana(request) as a single response
-// Return value   : None
-
-function readDeviceData(ddict)
-{
-    return new Promise(async function(resolve, reject) {
-        for(var i=0; i<ddict["dlist"].length; i++)
-        {
-            var rval = await readFromInflux(ddict["id"], ddict.dbdata, ddict["strsc"], ddict["strgbc"], ddict["dlist"][i], ddict["fdate"], ddict["tdate"])
-
-            sindex = rval[0]
-            infres = rval[1]
-
-            //dicout = JSON.parse(infres)
-            dicout = infres
-
-            if(dicout.results[0].hasOwnProperty("series"))
-            {
-                indict = dicout.results[0].series[0]
-                tagdict = {}
-
-                for(k=0; k<ddict.taglist.length; k++)
-                {
-                    tagdict[ddict.taglist[k]] =  ddict["dlist"][i].location[k+2]
-                }
-                 
-                loctag = []
-                for(k=0; k<ddict.taglist.length; k++)
-                {
-                    loctag.push(ddict["dlist"][i].location[k+2])
-                }
-                loctag.reverse()
-                tagdict["loctag"] = loctag.join(' ')
-                 
-                tagdict["latitude"] = ddict["dlist"][i].location[0]
-                tagdict["longitude"] = ddict["dlist"][i].location[1]
-                indict["tags"] = tagdict
-                ddict["sarr"].push(indict)
-            }
+function compileinfquery(indict, bqry){
+    for(let i=0; i<indict.devices.length; i++){
+        let dbdict = indict.dsrc[indict.devices[i].dsid]
+    
+        let qry1 = "SELECT "+indict.select+" FROM "+"\""+dbdict.mmtname+"\""
+        let qry2 = " WHERE ("+"\""+indict.devices[i].devtype+"\""+" = '"+indict.devices[i].devid+"' )"
+        let qry3 = maptimespan(indict.time, indict.devices[i])
+        
+        let fqry = qry1 + qry2 + " AND " + qry3 + " GROUP BY " + bqry["GROUPBY"]
+        if(bqry["LIMIT"] != null){
+            fqry = fqry + " LIMIT " + bqry["LIMIT"]
         }
-        resdict = {}
-        resdict["statement_id"] = 0
-        resdict["series"] = ddict["sarr"]
-        findict = {}
-        findict["results"] = [resdict]
-        ddict["res"].status(200).send(findict); 
-        resolve()
-    });
+
+        // return fqry
+        indict.devices[i]["qry"] = fqry
+        indict.devices[i]["indb"] = {url: dbdict.dburl, db: dbdict.dbname, uname: dbdict.uname, pwd: dbdict.pwd}
+    }
+
 }
 
+function maptimespan(graftime, ddevdict){
+    let fmdate = new Date(graftime[0])
+    let todate = new Date(graftime[1])
+
+    let idate = new Date(ddevdict.idate);
+    let rdate = new Date(ddevdict.rdate);
+    if(ddevdict.rdate == null)
+    {
+        rdate = new Date();
+    }
+              
+    let influxfmdt = idate, influxtodt = rdate;
+
+    if(idate.getTime() < fmdate.getTime())
+    {
+        influxfmdt = fmdate; 
+    }
+    if(rdate.getTime() > todate.getTime())
+    {
+        influxtodt = todate;
+    }
+
+    let fmms = influxfmdt.getTime()
+    let toms = influxtodt.getTime()
+
+    let timstr = "time >= "+fmms.toString()+"ms and time <= "+toms.toString()+"ms "
+
+    return timstr
+}
 
 // Function Name  : extractTimeSpan
 // Input Parameter: Array of Objects
@@ -313,127 +487,4 @@ function extractTags(inq)
     alltag.push(dictall)
     
     return alltag
-}
-
-
-// Function Name  : interpretSelectQuery
-// Input Parameter: Select Query
-// Return Value   : Array[4]
-// 1. SELECT Clause --> 'SELECT mean("t") FROM "HeatData"'
-// 2. WHERE Clause -->  '"state" = 'Tamil Nadu' AND "city" = 'Chennai' AND "ward" = 'Tambaram''
-// 3. Time span -->  'time >= now() - 2d'
-// 4. GROUP BY --> 'time(1d) fill(none)'
-
-function interpretSelectQuery(inq)
-{
-    var fdbstr 
-    var gbystr
-    var tagstr
-    var timstr
-
-    var resstr = inq.split("WHERE")
-    var fdbstr = resstr[0].trim()
-    var str2 = resstr[1].split("GROUP BY")
-    var part2 = str2[0].trim()
-    var gbystr = str2[1].trim()
-
-    if(part2.startsWith("("))
-    {
-        tag_flg = 1
-        var tagpart = part2.split("time >=")
-        var tagstr1 = tagpart[0].split(")")
-
-        tagstr = tagstr1[0].replace("(","").trim()
-        timstr = "time >="+tagpart[1]
-
-    }
-    else
-    {
-        tagstr = null
-        timstr = part2.trim()
-    }
-
-    var allstr = []
-    allstr.push(fdbstr)
-    allstr.push(tagstr)
-    allstr.push(timstr)
-    allstr.push(gbystr)
-
-    return allstr
-}
-
-
-// Function Name  : readFromInflux
-// Input Parameter: database name, Select clause, Group By Clause, [devId, idate, rdate], fromDate, toDate
-// Return Value   : Influx Data
-
-async function readFromInflux(rindex, dbinflux, selc, gbyc, devdata, fmdate, todate)
-{
-    var influxset = {};
-
-    influxset.server = dbinflux.url
-    influxset.db = dbinflux.dbname
-    influxset.user = dbinflux.user
-    influxset.pwd = dbinflux.pwd
-
-    var idate = new Date(devdata.idate);
-    var rdate = new Date(devdata.rdate);
-    if(devdata[2] == null)
-    {
-        rdate = new Date();
-    }
-              
-    var influxfmdt = idate, influxtodt = rdate;
-
-    if(idate.getTime() < fmdate.getTime())
-    {
-        influxfmdt = fmdate; 
-    }
-    if(rdate.getTime() > todate.getTime())
-    {
-        influxtodt = todate;
-    }
-
-    var fmms = influxfmdt.getTime()
-    var toms = influxtodt.getTime()
-
-    var timstr = "time >= "+fmms.toString()+"ms and time <= "+toms.toString()+"ms "
-
-    orflg = 0
-    devid = ""
-    
-    if(devdata.deviceid != "")
-    {
-        devid = devid+"\"deviceid\" = '"+devdata.deviceid+"'"
-        orflg = 1
-    }
-    if(devdata.devID != "")
-    {
-        if(orflg)
-        {
-            devid = devid+" or "
-        }
-        devid = devid+"\"devID\" = '"+devdata.devID+"'"
-        orflg = 1
-    }
-
-    if(devdata.devEUI != "")
-    {
-        if(orflg)
-        {
-            devid = devid+" or "
-        }
-        devid = devid+"\"devEUI\" = '"+devdata.devEUI+"'"
-    }
-
-    var query = selc+"("+devid+")"+" AND "+timstr+gbyc
-        
-    influxset.qry = query
-
-    try{
-        influxdata = await readdb.readInflux(influxset)
-        return [rindex,influxdata]
-    }catch(err){
-        return "error"        
-    }
 }
